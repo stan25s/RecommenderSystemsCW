@@ -31,7 +31,10 @@ public class Task2 {
         }
 
         trainingData = get2DArrayFromAL(tempALTraining);
+        float[][] similarityMatrix = getSimilarityMatrix(trainingData);
 
+        //System.out.println(Arrays.deepToString(trainingData));
+        System.out.println(Arrays.deepToString(similarityMatrix));
         /*
         Training Function:
         Takes in trainingData 2d array
@@ -52,6 +55,58 @@ public class Task2 {
             Iterate through entire array from the test set. Calculate each predicted rating and append to 2d array.
          */
 
+    }
+
+
+    private static float[][] getSimilarityMatrix(float[][] trainingData) {
+        float[][] resultMatrix;
+
+        List<Float> listOfUsers = new ArrayList<>();
+        for (float[] i : trainingData) {
+            //first value of subarray within trainingData is userID
+            if (!listOfUsers.contains(i[0])) {
+                listOfUsers.add(i[0]);
+            }
+        }
+        //initialize result matrix with amount of users found
+        resultMatrix = new float[listOfUsers.size()][listOfUsers.size()];
+
+        for(int i = 0; i < listOfUsers.size(); i++) {
+            for(int j = 0; j < listOfUsers.size(); j++) {
+                Map<Float, Float> userAMap = getUserRatedItems(trainingData, i + 1);
+                Map<Float, Float> userBMap = getUserRatedItems(trainingData, j + 2);
+
+                resultMatrix[i][j] = cosineSimilarity(userAMap, userBMap);
+            }
+        }
+
+        return resultMatrix;
+    }
+
+    private static Map<Float, Float> getUserRatedItems(float[][] allTrainingData, float userID) {
+        //This function needs to iterate over the trainingData 2d array and find all items rated by userID
+        //Then add these as key-value pairs to the map to output
+            //Map should contain itemID, ItemRating as key-value respectively.
+        Map<Float, Float> resultMap = new HashMap<>();
+
+        float currentUser = 0;
+        int currentIndex = 0;
+        try {
+            //System.out.println(allTrainingData.length);
+            while (currentUser <= userID && currentIndex < allTrainingData.length) {
+                currentUser = allTrainingData[currentIndex][0];
+                if(currentUser == userID) {
+                    //if the current line from the training array is for the correct user, add item and rating to map.
+                    resultMap.put(allTrainingData[currentIndex][1], allTrainingData[currentIndex][2]);
+                }
+                currentIndex += 1;
+            }
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+            System.out.println("Error Getting Item Ratings Map For User: " + userID);
+        }
+        //System.out.println(resultMap);
+        return resultMap;
     }
 
     /*
@@ -80,68 +135,53 @@ public class Task2 {
       Output: float similarity.
         Similarity is calculated using cosine similarity algorithm
      */
-    private static float cosineSimilarity(float[][] user1Ratings, float[][] user2Ratings) {
+    private static float cosineSimilarity(Map<Float, Float> user1Map, Map<Float, Float> user2Map) {
         float similarity = 0;
 
         //Create a list of the items that both users have rated:
         float[][] ratings;
         //List<Float> user1Items = new ArrayList<>();
         List<Float> itemsInCommon = new ArrayList<>();
-        Map<Float, Float> user1Map = new HashMap<>();
-        Map<Float, Float> user2Map = new HashMap<>();
 
-        for (float[] i : user1Ratings) {
-            //Take the item id number from the user1ratings and add this to the user1items list.
-            user1Map.put(i[0], i[1]);
-        }
+//        for (float[] i : user1Ratings) {
+//            //Take the item id number from the user1ratings and add this to the user1items list.
+//            user1Map.put(i[0], i[1]);
+//        }
 
-        for (float[] i : user2Ratings) {
-            //Take the item id number from the user1ratings and add this to the user1items list.
-            user2Map.put(i[0], i[1]);
-        }
+//        for (float[] i : user2Ratings) {
+//            //Take the item id number from the user1ratings and add this to the user1items list.
+//            user2Map.put(i[0], i[1]);
+//        }
 
-        for (float[] i : user2Ratings) {
-            if (user1Map.containsKey(i[0])){
-                //If user 1 and 2 have both rated item, add to items in common ArrayList
-                itemsInCommon.add(i[0]);
+        for (float i : user2Map.keySet()) {
+            if (user1Map.containsKey(i)){
+                //If user 1 and 2 have both rated item, add to itemsInCommon ArrayList
+                itemsInCommon.add(i);
             }
         }
 
-        float sumOfRatingProducts = 0;
-        for (float i : itemsInCommon) {
-            sumOfRatingProducts += user1Map.get(i) * user2Map.get(i);
+        //Here's the actual cosine similarity algorithm implementation
+        if(itemsInCommon.size() != 0) {
+            float sumOfRatingProducts = 0;
+            for (float i : itemsInCommon) {
+                sumOfRatingProducts += user1Map.get(i) * user2Map.get(i);
+            }
+
+            double sqrtOfUser1RatingsSquared = 0, sqrtOfUser2RatingsSquared = 0;
+            for (float i : itemsInCommon) {
+                sqrtOfUser1RatingsSquared += user1Map.get(i) * user1Map.get(i);
+                sqrtOfUser2RatingsSquared += user2Map.get(i) * user2Map.get(i);
+            }
+            sqrtOfUser1RatingsSquared = Math.sqrt(sqrtOfUser1RatingsSquared);
+            sqrtOfUser2RatingsSquared = Math.sqrt(sqrtOfUser2RatingsSquared);
+
+            similarity = (float) (sumOfRatingProducts / (sqrtOfUser1RatingsSquared * sqrtOfUser2RatingsSquared));
+        } else {
+            similarity = 0;
         }
 
-        float sqrtOfUser1RatingsSquared = 0, sqrtOfUser2RatingsSquared = 0;
-        for (float i : itemsInCommon) {
-            sqrtOfUser1RatingsSquared += user1Map.get(i) * user1Map.get(i);
-            sqrtOfUser2RatingsSquared += user2Map.get(i) * user2Map.get(i);
-        }
-        sqrtOfUser1RatingsSquared = (float) Math.sqrt(sqrtOfUser1RatingsSquared);
-        sqrtOfUser2RatingsSquared = (float) Math.sqrt(sqrtOfUser2RatingsSquared);
-
-        similarity = sumOfRatingProducts / (sqrtOfUser1RatingsSquared * sqrtOfUser2RatingsSquared);
 
         return similarity;
-    }
-
-    /*
-      contains() is a helper function which decides whether an array of floats contains a given float
-      Input: float[] array, float item
-      Output: boolean contains.
-        If array contains float item, returns true.
-     */
-    private static boolean contains(float[] array, float item) {
-        boolean result = false;
-
-        for (float i : array){
-            if (i == item) {
-                result = true;
-                break;
-            }
-        }
-
-        return result;
     }
 
 }
