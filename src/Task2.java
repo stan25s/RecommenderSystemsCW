@@ -1,6 +1,4 @@
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 
 public class Task2 {
@@ -30,14 +28,36 @@ public class Task2 {
             System.out.println();
         }
 
-        trainingData = get2DArrayFromAL(tempALTraining);
+        ArrayList<String[]> tempALTest = new ArrayList<>();
+        try {
+            //parsing a CSV file into BufferedReader class constructor
+            BufferedReader br = new BufferedReader(new FileReader(testFile));
+            while ((line = br.readLine()) != null) {
+                String[] singleRecord = line.split(",");    // use comma as separator
+                tempALTest.add(singleRecord);
+            }
+        }
+        catch (IOException e) {
+            System.out.println();
+        }
+
+        trainingData = get2DArrayFromAL(tempALTraining, 4);
+        testData = get2DArrayFromAL(tempALTest, 3);
+
         float[][] similarityMatrix = getSimilarityMatrix(trainingData);
 
         //System.out.println(Arrays.deepToString(trainingData));
         //System.out.println(Arrays.deepToString(similarityMatrix));
 
-        Map<Float, List<Float>> n = getNeighboursPerUser(trainingData, similarityMatrix, neighborhoodSize);
+        Map<Float, List<Float>> neighbors = getNeighboursPerUser(trainingData, similarityMatrix, neighborhoodSize);
 
+        float[][] predictions = fillPredictedRatings(similarityMatrix, neighbors, trainingData, testData);
+
+//        for (float[] i : predictions) {
+//            System.out.println(Arrays.toString(i));
+//        }
+
+        writeToFile(predictions);
         /*
         Training Function:
         Takes in trainingData 2d array
@@ -58,6 +78,34 @@ public class Task2 {
             Iterate through entire array from the test set. Calculate each predicted rating and append to 2d array.
          */
 
+    }
+
+    private static void writeToFile(float[][] predictions) {
+        File results = new File("resultsTask2.csv");
+        PrintWriter writer = null;
+
+        try {
+            writer = new PrintWriter(results);
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+//        MAE = calcMAE(predArray, goldArray);
+//        MSE = calcMSE(predArray, goldArray);
+//        RMSE = calcRMSE(MSE);
+        StringBuilder sb = new StringBuilder();
+        for (float[] i : predictions) {
+            sb.append((int)i[0]);
+            sb.append(",");
+            sb.append((int)i[1]);
+            sb.append(",");
+            sb.append(i[2]);
+            sb.append(",");
+            sb.append((int)Math.floor(i[3]));
+            sb.append("\n");
+            writer.write(sb.toString());
+        }
+        writer.close();
     }
 
     private static Map<Float, List<Float>> getNeighboursPerUser(float[][] trainingData,
@@ -93,11 +141,11 @@ public class Task2 {
             for(int k = l.size() - 1; k >= l.size() - N; k--) {
                 neighborsToAdd.add(l.get(k));
             }
-            System.out.println(i);
-            for(float n : neighborsToAdd) {
-                System.out.print(n + ":" + similarityMatrix[(int)i-1][(int)n-1]);
-            }
-            System.out.println();
+//            System.out.println(i);
+//            for(float n : neighborsToAdd) {
+//                System.out.print(n + ":" + similarityMatrix[(int)i-1][(int)n-1]);
+//            }
+//            System.out.println();
             neighbors.put(i, neighborsToAdd);
         }
         return neighbors;
@@ -119,8 +167,60 @@ public class Task2 {
         return result;
     }
 
-    private static float[][] fillPredictedRatings(float[][] similarityMatrix, Map<Float, Integer[]> neighbourMap) {
-        return null;
+    private static float[][] fillPredictedRatings(float[][] similarityMatrix, Map<Float, List<Float>> neighbourMap,
+                                                  float[][] trainingData, float[][] testData) {
+        float[][] outputArray = new float[testData.length][4];
+        int indexForOutputArray = 0;
+
+        for (float[] row : testData) {
+            float userID = row[0];
+            float itemID = row[1];
+            float userAverageRating;
+            Map<Float, Float> userAItems = getUserRatedItems(trainingData, userID);
+
+            //get average ratings
+            float ratingsSum = 0;
+            for (float rating : userAItems.values()) {
+                ratingsSum += rating;
+            }
+            userAverageRating = ratingsSum / userAItems.size();
+
+            float sum1 = 0;
+            float sum2 = 0;
+            for (float neighbor : neighbourMap.get(userID)) {
+                Map<Float, Float> neighborRatedItems = getUserRatedItems(trainingData, neighbor);
+                float adjustedRating;
+                if (neighborRatedItems.containsKey(itemID)) {
+                    float meanRating = 0;
+                    for (float item : neighborRatedItems.values()) {
+                        meanRating += item;
+                    }
+                    meanRating = meanRating / neighborRatedItems.size();
+                    adjustedRating = neighborRatedItems.get(itemID) - meanRating;
+                } else {
+                    adjustedRating = 0;
+                }
+                sum1 += getSimilarityBetweenUsers(similarityMatrix, userID, neighbor) * adjustedRating;
+
+                //Calculating sum of similarities between users
+                sum2 += getSimilarityBetweenUsers(similarityMatrix, userID, neighbor);
+            }
+
+            float prediction = userAverageRating + (sum1 / sum2);
+
+            //add new row with prediction to output array
+            outputArray[indexForOutputArray] = new float[]{row[0], row[1], prediction, (int) row[2]};
+            indexForOutputArray += 1;
+        }
+        return outputArray;
+    }
+
+    /*
+      getSimilarityBetweenUsers() - takes 2 userIDs as inputs, and returns the
+        corresponding value from the similarity matrix.
+     */
+    private static float getSimilarityBetweenUsers(float[][] similarityMatrix, float user1, float user2) {
+        return similarityMatrix[(int)user1-1][(int)user2-1];
     }
 
     private static float[][] getSimilarityMatrix(float[][] trainingData) {
@@ -179,12 +279,12 @@ public class Task2 {
       Input: ArrayList<String[]> arrayListStr
       Output: float[][] containing parsed values from csv input
      */
-    private static float[][] get2DArrayFromAL(ArrayList<String[]> arrayListStr) {
+    private static float[][] get2DArrayFromAL(ArrayList<String[]> arrayListStr, int rowSize) {
         int size = arrayListStr.size();
-        float[][] output = new float[size][4];
+        float[][] output = new float[size][rowSize];
 
         for (int i = 0; i < size; i++) {
-            for (int j = 0; j < 4; j++) {
+            for (int j = 0; j < rowSize; j++) {
                 output[i][j] = Float.parseFloat(arrayListStr.get(i)[j]);
             }
         }
