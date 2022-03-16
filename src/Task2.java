@@ -13,7 +13,7 @@ public class Task2 {
 
         float[][] testData;
 
-        int neighborhoodSize; //Change this variable to experiment with accuracy over different neighborhood sizes.
+        int neighborhoodSize = 10; //Change this variable to experiment with accuracy over different neighborhood sizes.
 
         //Temporary ArrayList to handle parsing the Prediction csv file.
         ArrayList<String[]> tempALTraining = new ArrayList<>();
@@ -34,7 +34,10 @@ public class Task2 {
         float[][] similarityMatrix = getSimilarityMatrix(trainingData);
 
         //System.out.println(Arrays.deepToString(trainingData));
-        System.out.println(Arrays.deepToString(similarityMatrix));
+        //System.out.println(Arrays.deepToString(similarityMatrix));
+
+        Map<Float, List<Float>> n = getNeighboursPerUser(trainingData, similarityMatrix, neighborhoodSize);
+
         /*
         Training Function:
         Takes in trainingData 2d array
@@ -57,6 +60,68 @@ public class Task2 {
 
     }
 
+    private static Map<Float, List<Float>> getNeighboursPerUser(float[][] trainingData,
+                                                              float[][] similarityMatrix, int neighborhoodSize) {
+        int N = neighborhoodSize;
+        Map<Float, List<Float>> neighbors = new HashMap<>();
+
+        List<Float> listOfUsers = new ArrayList<>();
+        for (float[] i : trainingData) {
+            //first value of subarray within trainingData is userID
+            if (!listOfUsers.contains(i[0])) {
+                listOfUsers.add(i[0]);
+            }
+        }
+
+        //iterate through users list in order to create a list of neighbours for each user
+        for (float i : listOfUsers) {
+            float[] usersToCompareWithI = similarityMatrix[(int)i-1];
+            //find top N neighbours based on similarity rating
+
+            //add all users to a map of users to similarity rating
+            Map<Float, Float> usersToSimilarity = new HashMap<>();
+            for (int count = 0; count < usersToCompareWithI.length; count++) {
+                int userID = count + 1;
+                usersToSimilarity.put((float) userID, usersToCompareWithI[count]);
+            }
+            //Sort the map to create an ordered map, so I can select most similar users
+            Map<Float, Float> sortedMap = sortMap(usersToSimilarity);
+            List<Float> l = new ArrayList<>(sortedMap.keySet());
+
+            //Add top N to neighour set
+            List<Float> neighborsToAdd = new ArrayList<>();
+            for(int k = l.size() - 1; k >= l.size() - N; k--) {
+                neighborsToAdd.add(l.get(k));
+            }
+            System.out.println(i);
+            for(float n : neighborsToAdd) {
+                System.out.print(n + ":" + similarityMatrix[(int)i-1][(int)n-1]);
+            }
+            System.out.println();
+            neighbors.put(i, neighborsToAdd);
+        }
+        return neighbors;
+    }
+
+    /*
+      sortMap() is a helper function, used to sort the order of a map of user to similarity
+      This is used when finding the most similar users
+     */
+    private static Map<Float, Float> sortMap(Map<Float, Float> userToSim) {
+        List<Map.Entry<Float, Float>> list = new ArrayList<>(userToSim.entrySet());
+        list.sort(Map.Entry.comparingByValue());
+
+        Map<Float, Float> result = new LinkedHashMap<>();
+        for (Map.Entry<Float, Float> entry : list) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+
+        return result;
+    }
+
+    private static float[][] fillPredictedRatings(float[][] similarityMatrix, Map<Float, Integer[]> neighbourMap) {
+        return null;
+    }
 
     private static float[][] getSimilarityMatrix(float[][] trainingData) {
         float[][] resultMatrix;
