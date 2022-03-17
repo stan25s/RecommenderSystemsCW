@@ -13,7 +13,7 @@ public class Task2 {
 
         int neighborhoodSize = 10; //Change this variable to experiment with accuracy over different neighborhood sizes.
 
-        //Temporary ArrayList to handle parsing the Prediction csv file.
+        //Temporary ArrayList to handle parsing the Training csv file.
         ArrayList<String[]> tempALTraining = new ArrayList<>();
         String line;
         try {
@@ -28,6 +28,7 @@ public class Task2 {
             System.out.println();
         }
 
+        //Temporary ArrayList to handle parsing the Test csv file.
         ArrayList<String[]> tempALTest = new ArrayList<>();
         try {
             //parsing a CSV file into BufferedReader class constructor
@@ -46,18 +47,13 @@ public class Task2 {
 
         float[][] similarityMatrix = getSimilarityMatrix(trainingData);
 
-        //System.out.println(Arrays.deepToString(trainingData));
-        //System.out.println(Arrays.deepToString(similarityMatrix));
-
         Map<Float, List<Float>> neighbors = getNeighboursPerUser(trainingData, similarityMatrix, neighborhoodSize);
 
         float[][] predictions = fillPredictedRatings(similarityMatrix, neighbors, trainingData, testData);
 
-//        for (float[] i : predictions) {
-//            System.out.println(Arrays.toString(i));
-//        }
 
         writeToFile(predictions);
+
         /*
         Training Function:
         Takes in trainingData 2d array
@@ -80,6 +76,12 @@ public class Task2 {
 
     }
 
+    /*
+      writeToFile() - this is a helper function that takes the result (output for this task) as a 2d array and writes
+        this to a .csv file.
+      Input -  float[][] predictions (This is a copy of the 100k test set with predictions added)
+      Output - void
+     */
     private static void writeToFile(float[][] predictions) {
         File results = new File("resultsTask2.csv");
         PrintWriter writer = null;
@@ -90,9 +92,6 @@ public class Task2 {
             System.out.println(e.getMessage());
         }
 
-//        MAE = calcMAE(predArray, goldArray);
-//        MSE = calcMSE(predArray, goldArray);
-//        RMSE = calcRMSE(MSE);
         StringBuilder sb = new StringBuilder();
         for (float[] i : predictions) {
             sb.append((int)i[0]);
@@ -108,6 +107,17 @@ public class Task2 {
         writer.close();
     }
 
+    /*
+      getNeighboursPerUser() - this function takes the similarity matrix, and trainingData along with the neighborhood
+        size as inputs. It uses these to create a map between with a key-value pair of user to list of neighbours
+        userIDs.
+        I have chosen to select the neighborhood per user by picking the top N most similar users based on the
+        similarity matrix.
+      Input -   float[][] trainingData,
+                float[][] similarityData,
+                int neighborhoodSize
+      Output -  Map<Float, List<Float>> usersToNeighborsMap
+     */
     private static Map<Float, List<Float>> getNeighboursPerUser(float[][] trainingData,
                                                               float[][] similarityMatrix, int neighborhoodSize) {
         int N = neighborhoodSize;
@@ -141,24 +151,23 @@ public class Task2 {
             for(int k = l.size() - 1; k >= l.size() - N; k--) {
                 neighborsToAdd.add(l.get(k));
             }
-//            System.out.println(i);
-//            for(float n : neighborsToAdd) {
-//                System.out.print(n + ":" + similarityMatrix[(int)i-1][(int)n-1]);
-//            }
-//            System.out.println();
+
             neighbors.put(i, neighborsToAdd);
         }
         return neighbors;
     }
 
     /*
-      sortMap() is a helper function, used to sort the order of a map of user to similarity
-      This is used when finding the most similar users
+      sortMap() is a helper function, used to sort the order of a map of user to similarity. This is used when
+        finding the most similar users for the getNeighboursPerUser() function.
+      Input -  Map<Float, Float> userToSim (This is a mapping of every user and their similarity to the current user)
+      Output - Map<Float, Float> userToSim (Sorted version of input map)
      */
     private static Map<Float, Float> sortMap(Map<Float, Float> userToSim) {
         List<Map.Entry<Float, Float>> list = new ArrayList<>(userToSim.entrySet());
         list.sort(Map.Entry.comparingByValue());
 
+        //Using LinkedHashMap in order to create an iterable map of ordered results.
         Map<Float, Float> result = new LinkedHashMap<>();
         for (Map.Entry<Float, Float> entry : list) {
             result.put(entry.getKey(), entry.getValue());
@@ -167,6 +176,18 @@ public class Task2 {
         return result;
     }
 
+    /*
+      fillPredictedRatings() - This is the main function where the predictions are calculated, using a combination of
+        the similarity matrix, the Map of users to neighbours, and the input training data. This function also then
+        adds the result predictions to the test-set 2d array ready for writing to file.
+      Formula used - Using prediction formula from lecture slides:
+        pred(u, i) = aveRating(u) + (sum[u' in N]{similarity(u,u') * (rating(u',i) - aveRating(u')}) / sum[u' in N]{similarity(u,u')}
+      Input -  float[][] similarityMatrix,
+               Map<Float, List<Float>> neighborMap,
+               float[][] trainingData,
+               float[][] testData
+      Output - float[][] predictions
+     */
     private static float[][] fillPredictedRatings(float[][] similarityMatrix, Map<Float, List<Float>> neighbourMap,
                                                   float[][] trainingData, float[][] testData) {
         float[][] outputArray = new float[testData.length][4];
@@ -209,20 +230,30 @@ public class Task2 {
             float prediction = userAverageRating + (sum1 / sum2);
 
             //add new row with prediction to output array
-            outputArray[indexForOutputArray] = new float[]{row[0], row[1], prediction, (int) row[2]};
+            outputArray[indexForOutputArray] = new float[]{row[0], row[1], prediction, row[2]};
             indexForOutputArray += 1;
         }
         return outputArray;
     }
 
     /*
-      getSimilarityBetweenUsers() - takes 2 userIDs as inputs, and returns the
-        corresponding value from the similarity matrix.
+      getSimilarityBetweenUsers() - takes 2 userIDs as inputs, and returns the corresponding value from the similarity
+        matrix. This is simply a helper function that looks up a value in the similarityMatrix.
+      Input -  float[][] similarityMatrix,
+               float user1 (ID of first user)
+               float user2 (ID of second user)
+      Output - float similarity
      */
     private static float getSimilarityBetweenUsers(float[][] similarityMatrix, float user1, float user2) {
         return similarityMatrix[(int)user1-1][(int)user2-1];
     }
 
+    /*
+      getSimilarityMatrix() - generates a matrix of similarity between each pair of users and outputs this as a 2d
+        array of float values representing each similarity value, as calculated using the cosineSimilarity function.
+      Input -  float[][] trainingData
+      Output - float[][] similarityMatrix
+     */
     private static float[][] getSimilarityMatrix(float[][] trainingData) {
         float[][] resultMatrix;
 
@@ -248,6 +279,13 @@ public class Task2 {
         return resultMatrix;
     }
 
+    /*
+      getUserRatedItems() - iterates over training data 2d array to find all of the items rated by a given user,
+        returning this as a Map of itemIDs to ratings.
+      Input -  float[][] trainingData
+               float userID
+      Output - Map<Float, Float> userRatedItems (Map of itemID to itemRating from user userID.)
+     */
     private static Map<Float, Float> getUserRatedItems(float[][] allTrainingData, float userID) {
         //This function needs to iterate over the trainingData 2d array and find all items rated by userID
         //Then add these as key-value pairs to the map to output
@@ -257,7 +295,6 @@ public class Task2 {
         float currentUser = 0;
         int currentIndex = 0;
         try {
-            //System.out.println(allTrainingData.length);
             while (currentUser <= userID && currentIndex < allTrainingData.length) {
                 currentUser = allTrainingData[currentIndex][0];
                 if(currentUser == userID) {
@@ -270,14 +307,13 @@ public class Task2 {
             System.err.println(e.getMessage());
             System.out.println("Error Getting Item Ratings Map For User: " + userID);
         }
-        //System.out.println(resultMap);
         return resultMap;
     }
 
     /*
-      get2DArrayFromAL() - converts ArrayList<String[]> to float[][]
+      get2DArrayFromAL() - helper function which converts ArrayList<String[]> to float[][]
       Input: ArrayList<String[]> arrayListStr
-      Output: float[][] containing parsed values from csv input
+      Output: float[][] 2DArray (containing parsed values from csv input)
      */
     private static float[][] get2DArrayFromAL(ArrayList<String[]> arrayListStr, int rowSize) {
         int size = arrayListStr.size();
@@ -294,11 +330,17 @@ public class Task2 {
 
 
     /*
-      cosineSimilarity() - calculates the similarity rating between 2 users
-      Input: float[][] user1Ratings, float[][] user2Ratings
-        These user-rating 2d arrays contain the item and rating for all items that the user has rated.
-      Output: float similarity.
-        Similarity is calculated using cosine similarity algorithm
+      cosineSimilarity() - calculates the similarity rating between 2 users using cosineSimilarity algorithm
+        This function converts the item ratings from each user that they have in common into 2 vectors
+        (represented as Maps of items to ratings) and then users these to calculate the average ratings to correct for
+        user bias when calculating similarity. Then it uses the following formula:
+      Formula used:
+        sim(x,y) = ( sum[item set]{rating(x,i) * rating(y,i)} ) / ( sqrt( sum[item set]{rating(x)^2} ) * sqrt( sum[item set]{rating(y)^2})
+      Input -  float[][] user1Ratings,
+               float[][] user2Ratings
+                    (These user-rating 2d arrays contain the item and rating for all items that the user has rated.)
+      Output - float similarity
+                    (Similarity is calculated using cosine similarity algorithm)
      */
     private static float cosineSimilarity(Map<Float, Float> user1Map, Map<Float, Float> user2Map) {
         float similarity = 0;
@@ -308,15 +350,6 @@ public class Task2 {
         //List<Float> user1Items = new ArrayList<>();
         List<Float> itemsInCommon = new ArrayList<>();
 
-//        for (float[] i : user1Ratings) {
-//            //Take the item id number from the user1ratings and add this to the user1items list.
-//            user1Map.put(i[0], i[1]);
-//        }
-
-//        for (float[] i : user2Ratings) {
-//            //Take the item id number from the user1ratings and add this to the user1items list.
-//            user2Map.put(i[0], i[1]);
-//        }
 
         for (float i : user2Map.keySet()) {
             if (user1Map.containsKey(i)){
