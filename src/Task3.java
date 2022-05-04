@@ -45,12 +45,10 @@ public class Task3 {
         trainingData = get2DArrayFromAL(tempALTraining, 4);
         testData = get2DArrayFromAL(tempALTest, 3);
 
-        float[][] similarityMatrix = getSimilarityMatrix(trainingData);
+        //generate completed ratings matrix with predictions here, using trainingData and testData
+        //and then write to file.
 
-        Map<Float, List<Float>> neighbors = getNeighboursPerUser(trainingData, similarityMatrix, neighborhoodSize);
-
-        float[][] predictions = fillPredictedRatings(similarityMatrix, neighbors, trainingData, testData);
-
+        float[][] predictions = new float[0][0];
 
         writeToFile(predictions);
 
