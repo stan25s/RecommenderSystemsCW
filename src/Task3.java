@@ -56,34 +56,20 @@ public class Task3 {
             }
         }
 
-        //generate completed ratings matrix with predictions here, using ratingsMatrix
-        float[][] fullRatingsMatrix = matrixFactorisation(ratingsMatrix, 10, 0.0002f, 0.1f);
+        //generate completed ratings matrix with predictions here, using matrix factorisation
+        float[][] fullRatingsMatrix = matrixFactorisation(ratingsMatrix, 3, 0.0002f, 0.02f);
+
+        float[][] predictions = new float[testData.length][4];
 
         //use ratings matrix to generate the array needed for outputting data
-        float[][] predictions = new float[0][0];
+        for(int i = 0; i < testData.length; i++) {
+            predictions[i][0] = testData[i][0];
+            predictions[i][1] = testData[i][1];
+            predictions[i][2] = fullRatingsMatrix[(int) testData[i][0] - 1][(int) testData[i][1]];
+            predictions[i][3] = testData[i][2];
+        }
 
         writeToFile(predictions);
-
-        /*
-        Training Function:
-        Takes in trainingData 2d array
-
-        Similarity:
-        - Create a matrix with the list of user on both sides.
-        - Calculate similarity using Cosine Similarity between each pair of users.
-        - - Ignore pairs of same user, and reverse pairs of users already calculated for to save processing time and memory.
-
-        Neighborhood Selection:
-        - Decide whether to select all users or a subset
-        - Using similarity ratings, find top M most similar users for Neighborhood
-            Create a list of user numbers to include for prediction algorithm
-
-        Prediction:
-        - Take one user and one item as input, along with list of neighbors, and similarity matrix, and training set of ratings.
-        - - Calculate prediction using algorithm from lecture notes (Recommender Systems 2)
-            Iterate through entire array from the test set. Calculate each predicted rating and append to 2d array.
-         */
-
     }
 
     /*
@@ -93,7 +79,7 @@ public class Task3 {
       Output - void
      */
     private static void writeToFile(float[][] predictions) {
-        File results = new File("resultsTask2.csv");
+        File results = new File("resultsTask3.csv");
         PrintWriter writer = null;
 
         try {
@@ -104,6 +90,7 @@ public class Task3 {
 
         StringBuilder sb = new StringBuilder();
         for (float[] i : predictions) {
+            sb = new StringBuilder();
             sb.append((int)i[0]);
             sb.append(",");
             sb.append((int)i[1]);
@@ -114,20 +101,27 @@ public class Task3 {
             sb.append("\n");
             writer.write(sb.toString());
         }
+
         writer.close();
     }
 
+    /*
+      matrixFactorisation function uses a basic Gradient Descent algorithm to minimise the RMSE of the predicted values
+      Input -  float[][] RM (this is the input ratings matrix, with 0 values for user/items that have no rating.)
+               int numberOfFeatures (The number of latent features to use in the matrix factors (the user and item matrix))
+               float alpha (The learning rate for the gradient descent algorithm)
+               float beta (The regularization parameter for gradient descent algorithm)
+      Output - float[][] RM (New version of Ratings Matrix, featuring all predicted values, calculated as the product
+                    of the 2 factor matrices)
+     */
     private static float[][] matrixFactorisation(float[][] RM,
                                                  int numberOfFeatures, float alpha, float beta) {
-        /*
-            Params:
-            ArrayList<Map<Integer, Float>> RM - This represents the Ratings Matrix, with
-         */
 
         int numOfUsers = RM.length;
         int numOfItems = RM[0].length;
 
         //Create UM and IM as 2d arrays with random values
+        //UM and IM are User Matrix and Item Matrix respectively
         float[][] UM = new float[numOfUsers][numberOfFeatures];
         float[][] IM = new float[numOfItems][numberOfFeatures];
 
@@ -144,21 +138,24 @@ public class Task3 {
         }
 
 
-        int steps = 1000; //Change this value to experiment with the accuracy of results
+        int steps = 5000;
+        /*
+        Change 'steps' value to experiment with the accuracy of results, this is the number of times the algorithm iterates
+         */
 
-        for (int i = 0; i < steps; i++) {
+        for (int steps2 = 0; steps2 < steps; steps2++) {
             //loops for the specified number of iterations
 
-            for (int j = 0; j < RM.length; j++) {
-                for (int k = 0; k < RM[0].length; k++) {
+            for (int i = 0; i < RM.length; i++) {
+                for (int j = 0; j < RM[0].length; j++) {
                     //calculate error for gradient
-                    if (RM[j][k] > 0) {
-                        float error = RM[j][k] - vectorDotProduct(UM[j], IM[k]);
+                    if (RM[i][j] > 0) {
+                        float error = RM[i][j] - vectorDotProduct(UM[i], IM[j]);
 
                         //calculate gradient using learning rate and regularisation param (alpha and beta)
-                        for (int features = 0; features < numberOfFeatures; features++) {
-                            UM[j][features] = UM[j][features] + alpha * (2 * error * IM[features][k] - beta * UM[j][features]);
-                            IM[j][features] = IM[j][features] + alpha * (2 * error * UM[features][k] - beta * IM[j][features]);
+                        for (int k = 0; k < numberOfFeatures; k++) {
+                            UM[i][k] = UM[i][k] + alpha * (2 * error * IM[j][k] - beta * UM[i][k]);
+                            IM[j][k] = IM[j][k] + alpha * (2 * error * UM[i][k] - beta * IM[j][k]);
                         }
                     }
                 }
@@ -166,27 +163,30 @@ public class Task3 {
 
             float[][] dotOfFactors = matrixDotProduct(UM, IM);
 
-            //calculate root mean squared error
-            double RMSE = 0.0f;
+            //calculate error
             float MSE = 0;
             for (int j = 0; j < RM.length; j++) {
                 for (int k = 0; k < RM[0].length; k++) {
                     //only calculate error for values that aren't 0
                     if (RM[j][k] > 0) {
                         MSE += Math.pow(RM[j][k] - dotOfFactors[j][k], 2);
+
+                        for (int l = 0; l < numberOfFeatures; l++) {
+                            MSE += (beta/2) * (Math.pow(UM[j][l], 2) + Math.pow(IM[k][l], 2));
+                        }
                     }
                 }
             }
-            RMSE = Math.sqrt(MSE);
 
             //If RMSE less than 0.001 this is a local minimum, so we can stop iterating.
-            if (RMSE < 0.001) {
+            if (MSE < 0.001) {
                 break;
             }
         }
         return matrixDotProduct(UM, IM);
     }
 
+    //Helper function which returns the dot product of two input vectors represented as float[].
     private static float vectorDotProduct(float[] vector1, float[] vector2) {
         float sum = 0;
 
@@ -201,6 +201,7 @@ public class Task3 {
         return sum;
     }
 
+    //Returns the product of two matrices, using the vectorDotProduct() function on each vector within the matrices.
     private static float[][] matrixDotProduct(float[][] matrix1, float[][] matrix2) {
         //assuming matrix2 transposed, so first dimension is used for both dimensions of result
         float[][] resultMatrix = new float[matrix1.length][matrix2.length];
@@ -213,22 +214,6 @@ public class Task3 {
 
         return resultMatrix;
     }
-
-//    private static float[][] transposeMatrix(float[][] matrix) {
-//        int m = matrix.length;
-//        int n = matrix[0].length;
-//
-//        float[][] transposedMatrix = new float[n][m];
-//
-//        for (int i = 0; i < n; i++) {
-//            for(int j = 0; j < m; j++) {
-//                transposedMatrix[i][j] = matrix[j][i];
-//            }
-//        }
-//
-//        return transposedMatrix;
-//    }
-
 
     /*
       get2DArrayFromAL() - helper function which converts ArrayList<String[]> to float[][]
